@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
 import { CampaignModule } from './modules/campaign/campaign.module';
+import { DataManagementModule } from './modules/data-management/data-management.module';
 
 @Module({
   imports: [
@@ -11,6 +12,7 @@ import { CampaignModule } from './modules/campaign/campaign.module';
     }),
     MongooseModule.forRoot('mongodb://localhost:27017/mats'),
     CampaignModule,
+    DataManagementModule,
   ],
   controllers: [],
   providers: [],
