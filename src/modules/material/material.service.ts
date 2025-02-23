@@ -1,17 +1,17 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Point } from '../schemas/point.schema';
 import { Model } from 'mongoose';
-import { CreatePointDto } from '../dtos/create-point.dto';
+import { Material } from './schemas/material.schema';
+import { CreateMaterialDto } from './dtos/create-material.dto';
 
 @Injectable()
-export class PointsService {
+export class MaterialService {
   constructor(
-    @InjectModel(Point.name) private readonly pointModel: Model<Point>,
+    @InjectModel(Material.name) private readonly materialModel: Model<Material>,
   ) {}
 
-  async create(createPointDto: CreatePointDto) {
-    const data = await this.pointModel.create(createPointDto);
+  async create(createMaterialDto: CreateMaterialDto) {
+    const data = await this.materialModel.create(createMaterialDto);
     if (!data) throw new BadRequestException('An error occurred!');
 
     return {
@@ -21,7 +21,7 @@ export class PointsService {
   }
 
   async getAll() {
-    const data = await this.pointModel.find();
+    const data = await this.materialModel.find();
 
     return {
       message: 'Request success',

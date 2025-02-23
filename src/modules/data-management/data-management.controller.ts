@@ -10,11 +10,11 @@ export class DataManagementController {
 
   @Post('create-point')
   create(@Body() createPointDto: CreatePointDto) {
-    return this.pointsService.createPoint(createPointDto);
+    return this.pointsService.create(createPointDto);
   }
 
   @Get('all-points')
   getById() {
-    return this.pointsService.getPoints();
+    return this.pointsService.getAll();
   }
 }
