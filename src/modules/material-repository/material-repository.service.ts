@@ -5,17 +5,20 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import * as XLSX from 'xlsx';
 import { MaterialRepository } from './schemas/material-repository.schema';
-
-interface ParsedRow {
-  Point: string;
-  [key: string]: any;
-}
+import { Material } from '../material/schemas/material.schema';
+import { Point } from '../data-management/schemas/point.schema';
 
 @Injectable()
 export class MaterialRepositoryService {
   constructor(
     @InjectModel(MaterialRepository.name)
     private readonly materialRepositoryModel: Model<MaterialRepository>,
+
+    @InjectModel(Material.name)
+    private readonly materialModel: Model<Material>,
+
+    @InjectModel(Point.name)
+    private readonly pointModel: Model<Point>,
   ) {}
 
   async materialAllocationAtPoint(
@@ -49,6 +52,10 @@ export class MaterialRepositoryService {
       throw new BadRequestException('Sheet data is missing');
     }
 
+    interface ParsedRow {
+      Point: string;
+      [key: string]: any;
+    }
     const jsonData: ParsedRow[] = XLSX.utils.sheet_to_json<ParsedRow>(sheet);
 
     const firstInputDoc = jsonData[0];
@@ -69,6 +76,15 @@ export class MaterialRepositoryService {
         material: materialArray,
       };
     });
+
+    const materials = await this.materialModel.find().select('name');
+    const points = await this.pointModel.find().select('point');
+
+    console.log(materials, 'mats');
+
+    console.log(points, 'points');
+
+    const filteredMaterial = [];
 
     return {
       data: data,
