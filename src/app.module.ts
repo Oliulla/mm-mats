@@ -4,6 +4,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { CampaignModule } from './modules/campaign/campaign.module';
 import { DataManagementModule } from './modules/data-management/data-management.module';
 import { MaterialModule } from './modules/material/material.module';
+import { MaterialRepositoryModule } from './modules/material-repository/material-repository.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { MaterialModule } from './modules/material/material.module';
     CampaignModule,
     DataManagementModule,
     MaterialModule,
+    MaterialRepositoryModule,
   ],
   controllers: [],
   providers: [],
