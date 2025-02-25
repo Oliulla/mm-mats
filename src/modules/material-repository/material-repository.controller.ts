@@ -1,9 +1,9 @@
 import {
   Controller,
-  Post,
   Param,
   UploadedFile,
   UseInterceptors,
+  Patch,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { MaterialRepositoryService } from './material-repository.service';
@@ -21,7 +21,7 @@ export class MaterialRepositoryController {
     type: CreateFileUploadDto,
   })
   @ApiConsumes('multipart/form-data')
-  @Post('material-allocate-at-point/:campaignId')
+  @Patch('material-allocate-at-point/:campaignId')
   @UseInterceptors(FileInterceptor('file'))
   materialAllocationAtPoint(
     @Param('campaignId') campaignId: string,

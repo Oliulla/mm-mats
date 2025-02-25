@@ -1,0 +1,2 @@
+* Get existant materials and points from excel sheet
+* Have to bulkwrite for update based on point and campaign. Only one document will be created or updated for each campaign and point 

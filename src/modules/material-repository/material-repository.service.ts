@@ -2,7 +2,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import mongoose, { Model, Types, UpdateOneModel } from 'mongoose';
 import * as XLSX from 'xlsx';
 import { MaterialRepository } from './schemas/material-repository.schema';
 import { Material } from '../material/schemas/material.schema';
@@ -30,7 +30,6 @@ export class MaterialRepositoryService {
     }
 
     let workbook: XLSX.WorkBook;
-
     try {
       workbook = XLSX.read(file.buffer, { type: 'buffer' });
     } catch (err: unknown) {
@@ -40,7 +39,6 @@ export class MaterialRepositoryService {
       );
       throw new BadRequestException('Error reading Excel file');
     }
-
     if (!workbook || !workbook.SheetNames.length) {
       throw new BadRequestException('Invalid Excel file');
     }
@@ -56,16 +54,21 @@ export class MaterialRepositoryService {
       Point: string;
       [key: string]: any;
     }
+
     const jsonData: ParsedRow[] = XLSX.utils.sheet_to_json<ParsedRow>(sheet);
 
-    const firstInputDoc = jsonData[0];
+    if (jsonData.length < 2) {
+      throw new BadRequestException('Invalid data format in Excel');
+    }
+
+    const firstMatsDoc = jsonData[0];
 
     const data = jsonData.slice(1).map((entry) => {
       const { Region, Area, Territory, Distribution, Point, ...materials } =
         entry;
 
       const materialArray = Object.keys(materials).map((key) => ({
-        name: firstInputDoc[key],
+        name: firstMatsDoc[key],
         allocated: materials[key],
         remaining: 0,
         pending: materials[key],
@@ -77,18 +80,67 @@ export class MaterialRepositoryService {
       };
     });
 
-    const materials = await this.materialModel.find().select('name');
+    const dbMaterials = await this.materialModel.find().select('name');
     const points = await this.pointModel.find().select('point');
 
-    console.log(materials, 'mats');
+    const bulkOps: Array<{
+      updateOne: {
+        filter: { campaign: Types.ObjectId; point: Types.ObjectId };
+        update: {
+          $set: {
+            campaign: Types.ObjectId;
+            point: Types.ObjectId;
+            material: any[];
+          };
+        };
+        upsert: boolean;
+      };
+    }> = [];
 
-    console.log(points, 'points');
+    points.forEach((pt) => {
+      const inputData = data.find((dt) => dt.point === pt.point);
+      if (!inputData) return;
 
-    const filteredMaterial = [];
+      const materialsMapped = inputData.material
+        .map((inputMat) => {
+          const materialDoc = dbMaterials.find(
+            (dbMat) => dbMat.name === inputMat.name,
+          );
+          return materialDoc
+            ? {
+                id: materialDoc._id,
+                allocated: Number(inputMat.allocated),
+                remaining: Number(inputMat.remaining),
+                pending: Number(inputMat.pending),
+              }
+            : null;
+        })
+        .filter(Boolean);
+
+      bulkOps.push({
+        updateOne: {
+          filter: { campaign: new Types.ObjectId(campaignId), point: pt._id },
+          update: {
+            $set: {
+              campaign: new Types.ObjectId(campaignId),
+              point: pt._id,
+              material: materialsMapped,
+            },
+          },
+          upsert: true,
+        },
+      });
+    });
+
+    // console.log(JSON.stringify(bulkOps, null, 4));
+
+    if (bulkOps.length > 0) {
+      await this.materialRepositoryModel.bulkWrite(bulkOps);
+    }
 
     return {
-      data: data,
-      message: 'Material allocation updated successfully',
+      data: null,
+      message: 'Request Success',
     };
   }
 }
