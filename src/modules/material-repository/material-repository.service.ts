@@ -2,7 +2,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import mongoose, { Model, Types, UpdateOneModel } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import * as XLSX from 'xlsx';
 import { MaterialRepository } from './schemas/material-repository.schema';
 import { Material } from '../material/schemas/material.schema';
@@ -25,27 +25,26 @@ export class MaterialRepositoryService {
     campaignId: string,
     file: Express.Multer.File,
   ) {
-    if (!file || !file.buffer) {
+    if (!file?.buffer) {
       throw new BadRequestException('Invalid file uploaded');
     }
 
     let workbook: XLSX.WorkBook;
     try {
       workbook = XLSX.read(file.buffer, { type: 'buffer' });
-    } catch (err: unknown) {
+    } catch (err) {
       console.error(
         'Error reading Excel file:',
         err instanceof Error ? err.message : err,
       );
       throw new BadRequestException('Error reading Excel file');
     }
-    if (!workbook || !workbook.SheetNames.length) {
+
+    if (!workbook?.SheetNames.length) {
       throw new BadRequestException('Invalid Excel file');
     }
 
-    const sheetName = workbook.SheetNames[0];
-    const sheet = workbook.Sheets[sheetName];
-
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
     if (!sheet) {
       throw new BadRequestException('Sheet data is missing');
     }
@@ -56,91 +55,83 @@ export class MaterialRepositoryService {
     }
 
     const jsonData: ParsedRow[] = XLSX.utils.sheet_to_json<ParsedRow>(sheet);
-
     if (jsonData.length < 2) {
       throw new BadRequestException('Invalid data format in Excel');
     }
 
+    // Header row for materials
     const firstMatsDoc = jsonData[0];
+    const campaignObjectId = new Types.ObjectId(campaignId);
 
-    const data = jsonData.slice(1).map((entry) => {
-      const { Region, Area, Territory, Distribution, Point, ...materials } =
-        entry;
+    // Preprocess the Excel data
+    const formattedData = jsonData
+      .slice(1)
+      .map(
+        ({ Region, Area, Territory, Distribution, Point, ...materials }) => ({
+          point: Point,
+          material: Object.keys(materials).map((key) => {
+            const rawName = firstMatsDoc[key];
+            const name =
+              typeof rawName === 'string' ? rawName : String(rawName || '');
+            return {
+              name,
+              allocated: Number(materials[key]) || 0,
+              remaining: 0,
+              pending: Number(materials[key]) || 0,
+            };
+          }),
+        }),
+      );
 
-      const materialArray = Object.keys(materials).map((key) => ({
-        name: firstMatsDoc[key],
-        allocated: materials[key],
-        remaining: 0,
-        pending: materials[key],
-      }));
+    const [dbMaterials, dbPoints] = await Promise.all([
+      this.materialModel.find().select('name _id'),
+      this.pointModel.find().select('point _id'),
+    ]);
 
-      return {
-        point: Point,
-        material: materialArray,
-      };
-    });
+    const materialMap: Map<string, Types.ObjectId> = new Map(
+      dbMaterials.map((mat) => [mat.name, mat._id]),
+    );
+    const pointMap: Map<string, Types.ObjectId> = new Map(
+      dbPoints.map((pt) => [pt.point, pt._id]),
+    );
 
-    const dbMaterials = await this.materialModel.find().select('name');
-    const points = await this.pointModel.find().select('point');
+    const bulkOps = formattedData.flatMap(({ point, material }) => {
+      const pointId = pointMap.get(point);
+      if (!pointId) return [];
 
-    const bulkOps: Array<{
-      updateOne: {
-        filter: { campaign: Types.ObjectId; point: Types.ObjectId };
-        update: {
-          $set: {
-            campaign: Types.ObjectId;
-            point: Types.ObjectId;
-            material: any[];
-          };
-        };
-        upsert: boolean;
-      };
-    }> = [];
-
-    points.forEach((pt) => {
-      const inputData = data.find((dt) => dt.point === pt.point);
-      if (!inputData) return;
-
-      const materialsMapped = inputData.material
-        .map((inputMat) => {
-          const materialDoc = dbMaterials.find(
-            (dbMat) => dbMat.name === inputMat.name,
-          );
-          return materialDoc
-            ? {
-                id: materialDoc._id,
-                allocated: Number(inputMat.allocated),
-                remaining: Number(inputMat.remaining),
-                pending: Number(inputMat.pending),
-              }
-            : null;
-        })
-        .filter(Boolean);
-
-      bulkOps.push({
-        updateOne: {
-          filter: { campaign: new Types.ObjectId(campaignId), point: pt._id },
-          update: {
-            $set: {
-              campaign: new Types.ObjectId(campaignId),
-              point: pt._id,
-              material: materialsMapped,
-            },
-          },
-          upsert: true,
+      const materialsMapped = material.flatMap(
+        ({ name, allocated, remaining, pending }) => {
+          if (typeof name !== 'string' || !name.trim()) return [];
+          const materialId = materialMap.get(name);
+          return materialId
+            ? [{ id: materialId, allocated, remaining, pending }]
+            : [];
         },
-      });
-    });
+      );
 
-    // console.log(JSON.stringify(bulkOps, null, 4));
+      return materialsMapped.length > 0
+        ? [
+            {
+              updateOne: {
+                filter: { campaign: campaignObjectId, point: pointId },
+                update: {
+                  $set: {
+                    campaign: campaignObjectId,
+                    point: pointId,
+                    material: materialsMapped,
+                  },
+                },
+                upsert: true,
+              },
+            },
+          ]
+        : [];
+    });
 
     if (bulkOps.length > 0) {
       await this.materialRepositoryModel.bulkWrite(bulkOps);
     }
 
-    return {
-      data: null,
-      message: 'Request Success',
-    };
+    return { data: null, message: 'Request Success' };
   }
 }
