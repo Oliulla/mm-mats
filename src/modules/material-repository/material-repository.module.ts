@@ -8,6 +8,7 @@ import { MaterialRepositoryController } from './material-repository.controller';
 import { MaterialRepositoryService } from './material-repository.service';
 import { Material, MaterialSchema } from '../material/schemas/material.schema';
 import { Point, PointSchema } from '../data-management/schemas/point.schema';
+import { Campaign, CampaignSchema } from '../campaign/schemas/campaign.schema';
 
 @Module({
   imports: [
@@ -20,6 +21,10 @@ import { Point, PointSchema } from '../data-management/schemas/point.schema';
       {
         name: Point.name,
         schema: PointSchema,
+      },
+      {
+        name: Campaign.name,
+        schema: CampaignSchema,
       },
     ]),
   ],

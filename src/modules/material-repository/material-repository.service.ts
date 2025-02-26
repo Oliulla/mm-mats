@@ -1,3 +1,6 @@
+/* eslint-disable @typescript-eslint/no-unsafe-return */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { Injectable, BadRequestException } from '@nestjs/common';
@@ -7,6 +10,7 @@ import * as XLSX from 'xlsx';
 import { MaterialRepository } from './schemas/material-repository.schema';
 import { Material } from '../material/schemas/material.schema';
 import { Point } from '../data-management/schemas/point.schema';
+import { Campaign } from '../campaign/schemas/campaign.schema';
 
 @Injectable()
 export class MaterialRepositoryService {
@@ -19,6 +23,9 @@ export class MaterialRepositoryService {
 
     @InjectModel(Point.name)
     private readonly pointModel: Model<Point>,
+
+    @InjectModel(Campaign.name)
+    private readonly campaignModel: Model<Campaign>,
   ) {}
 
   async materialAllocationAtPoint(
@@ -61,7 +68,6 @@ export class MaterialRepositoryService {
 
     // Header row for materials
     const firstMatsDoc = jsonData[0];
-    const campaignObjectId = new Types.ObjectId(campaignId);
 
     // Preprocess the Excel data
     const formattedData = jsonData
@@ -82,11 +88,15 @@ export class MaterialRepositoryService {
           }),
         }),
       );
+    // console.log(formattedData, 'formattedData');
 
-    const [dbMaterials, dbPoints] = await Promise.all([
+    const [dbMaterials, dbPoints, camp] = await Promise.all([
       this.materialModel.find().select('name _id'),
       this.pointModel.find().select('point _id'),
+      this.campaignModel.findOne({ _id: campaignId }).select('_id'),
     ]);
+
+    const campaignOid = camp?._id;
 
     const materialMap: Map<string, Types.ObjectId> = new Map(
       dbMaterials.map((mat) => [mat.name, mat._id]),
@@ -95,41 +105,74 @@ export class MaterialRepositoryService {
       dbPoints.map((pt) => [pt.point, pt._id]),
     );
 
-    const bulkOps = formattedData.flatMap(({ point, material }) => {
-      const pointId = pointMap.get(point);
-      if (!pointId) return [];
+    const bulkOps = await Promise.all(
+      formattedData.map(async ({ point, material }) => {
+        const pointId = pointMap.get(point);
+        if (!pointId) return null;
 
-      const materialsMapped = material.flatMap(
-        ({ name, allocated, remaining, pending }) => {
-          if (typeof name !== 'string' || !name.trim()) return [];
-          const materialId = materialMap.get(name);
-          return materialId
-            ? [{ id: materialId, allocated, remaining, pending }]
-            : [];
-        },
-      );
+        const filter = { campaign: campaignOid, point: pointId };
+        const materialsRepo = await this.materialRepositoryModel
+          .findOne(filter)
+          .select('material');
+        let matsDB = materialsRepo?.material || [];
 
-      return materialsMapped.length > 0
-        ? [
-            {
+        const matsInput = material.flatMap(
+          ({ name, allocated, remaining, pending }) => {
+            if (typeof name !== 'string' || !name.trim()) return [];
+            const materialId = materialMap.get(name);
+            return materialId
+              ? [{ id: materialId, allocated, remaining, pending }]
+              : [];
+          },
+        );
+
+        // Function to compare and sum for updating the materials
+        function updateMats(matsDB, matsInput) {
+          matsInput.forEach((inputItem) => {
+            const existingItem = matsDB.find(
+              (dbItem) => dbItem.id.toString() === inputItem.id.toString(),
+            );
+
+            // console.log(existingItem, 'existingItem');
+            // console.log(inputItem, 'inputItem');
+
+            if (existingItem) {
+              existingItem.allocated += inputItem.allocated;
+              existingItem.pending += inputItem.pending;
+            } else {
+              matsDB.push(inputItem);
+            }
+          });
+
+          return matsDB;
+        }
+        matsDB = updateMats(matsDB, matsInput);
+
+        return matsInput.length > 0
+          ? {
               updateOne: {
-                filter: { campaign: campaignObjectId, point: pointId },
+                filter: { campaign: campaignOid, point: pointId },
                 update: {
                   $set: {
-                    campaign: campaignObjectId,
+                    campaign: campaignOid,
                     point: pointId,
-                    material: materialsMapped,
+                    material: matsDB,
                   },
                 },
                 upsert: true,
               },
-            },
-          ]
-        : [];
-    });
+            }
+          : null;
+      }),
+    );
 
-    if (bulkOps.length > 0) {
-      await this.materialRepositoryModel.bulkWrite(bulkOps);
+    // console.log(validOps);
+
+    // ✅ Filter out `null` values
+    const validOps = bulkOps.filter((op) => op !== null);
+
+    if (validOps.length > 0) {
+      await this.materialRepositoryModel.bulkWrite(validOps);
     }
 
     return { data: null, message: 'Request Success' };
