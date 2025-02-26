@@ -1,6 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-unused-vars */
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
@@ -14,7 +12,8 @@ import {
   Filter,
   FormattedPointNdMats,
   MaterialAfterProcess,
-  MaterialBeforProcess,
+  MaterialBeforeProcess,
+  XLMaterials,
 } from './material-repository.entities';
 
 @Injectable()
@@ -82,13 +81,7 @@ export class MaterialRepositoryService {
   }
 
   private formatExcelData(jsonData: any[]): any[] {
-    const firstMatsDoc = jsonData[0];
-
-    // jsonData
-    //   .slice(1)
-    //   .map(({ Region, Area, Territory, Distribution, Point, ...materials }) =>
-    //     console.log(materials, 'mats'),
-    //   );
+    const firstMatsDoc = jsonData[0] as XLMaterials;
 
     return jsonData.slice(1).map(
       ({
@@ -100,7 +93,7 @@ export class MaterialRepositoryService {
         ...materials
       }: ExcelPointNdMats): FormattedPointNdMats => ({
         point: Point,
-        material: Object.keys(materials).map((key) => ({
+        materials: Object.keys(materials).map((key) => ({
           name: String(firstMatsDoc[key] || ''),
           allocated: Number(materials[key]) || 0,
           remaining: 0,
@@ -131,13 +124,13 @@ export class MaterialRepositoryService {
     campaignOid: Types.ObjectId,
   ) {
     const bulkOps = await Promise.all(
-      formattedData.map(async ({ point, material }: FormattedPointNdMats) => {
+      formattedData.map(async ({ point, materials }: FormattedPointNdMats) => {
         const pointId = pointMap.get(point);
         if (!pointId) return null;
 
         const filter: Filter = { campaign: campaignOid, point: pointId };
         let matsDB: MaterialAfterProcess[] = await this.repositMats(filter);
-        const matsInput = this.processInputMats(material, materialMap);
+        const matsInput = this.processInputMats(materials, materialMap);
 
         matsDB = this.updateMaterials(matsDB, matsInput);
 
@@ -174,7 +167,7 @@ export class MaterialRepositoryService {
   }
 
   private processInputMats(
-    material: MaterialBeforProcess[],
+    material: MaterialBeforeProcess[],
     materialMap: Map<string, Types.ObjectId>,
   ) {
     return material.flatMap(({ name, allocated, remaining, pending }) => {

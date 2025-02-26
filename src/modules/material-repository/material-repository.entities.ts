@@ -12,7 +12,7 @@ export interface MaterialAfterProcess {
   pending: number;
 }
 
-export interface MaterialBeforProcess {
+export interface MaterialBeforeProcess {
   name: string;
   allocated: number;
   remaining: number;
@@ -24,7 +24,7 @@ export type Filter = {
   point: Types.ObjectId;
 };
 
-interface XLMaterials {
+export interface XLMaterials {
   [key: string]: number;
 }
 
@@ -39,5 +39,5 @@ export interface ExcelPointNdMats {
 
 export interface FormattedPointNdMats {
   point: string;
-  material: MaterialBeforProcess[];
+  materials: MaterialBeforeProcess[];
 }
