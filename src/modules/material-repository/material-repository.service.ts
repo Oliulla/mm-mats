@@ -33,9 +33,6 @@ export class MaterialRepositoryService {
     campaignId: string,
     file: Express.Multer.File,
   ) {
-    if (!file?.buffer) {
-      throw new BadRequestException('Invalid file uploaded');
-    }
     const workbook = this.readExcelFile(file);
     const jsonData = this.parseSheetData(workbook);
     const formattedData = this.formatExcelData(jsonData);
