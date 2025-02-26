@@ -84,11 +84,11 @@ export class MaterialRepositoryService {
   private formatExcelData(jsonData: any[]): any[] {
     const firstMatsDoc = jsonData[0];
 
-    jsonData
-      .slice(1)
-      .map(({ Region, Area, Territory, Distribution, Point, ...materials }) =>
-        console.log(materials, 'mats'),
-      );
+    // jsonData
+    //   .slice(1)
+    //   .map(({ Region, Area, Territory, Distribution, Point, ...materials }) =>
+    //     console.log(materials, 'mats'),
+    //   );
 
     return jsonData.slice(1).map(
       ({
