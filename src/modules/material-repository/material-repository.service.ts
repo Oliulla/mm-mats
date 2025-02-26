@@ -1,7 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-return */
-/* eslint-disable @typescript-eslint/no-unsafe-argument */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { Injectable, BadRequestException } from '@nestjs/common';
@@ -12,6 +9,13 @@ import { MaterialRepository } from './schemas/material-repository.schema';
 import { Material } from '../material/schemas/material.schema';
 import { Point } from '../data-management/schemas/point.schema';
 import { Campaign } from '../campaign/schemas/campaign.schema';
+import {
+  ExcelPointNdMats,
+  Filter,
+  FormattedPointNdMats,
+  MaterialAfterProcess,
+  MaterialBeforProcess,
+} from './material-repository.entities';
 
 @Injectable()
 export class MaterialRepositoryService {
@@ -80,19 +84,30 @@ export class MaterialRepositoryService {
   private formatExcelData(jsonData: any[]): any[] {
     const firstMatsDoc = jsonData[0];
 
-    return jsonData
+    jsonData
       .slice(1)
-      .map(
-        ({ Region, Area, Territory, Distribution, Point, ...materials }) => ({
-          point: Point,
-          material: Object.keys(materials).map((key) => ({
-            name: String(firstMatsDoc[key] || ''),
-            allocated: Number(materials[key]) || 0,
-            remaining: 0,
-            pending: Number(materials[key]) || 0,
-          })),
-        }),
+      .map(({ Region, Area, Territory, Distribution, Point, ...materials }) =>
+        console.log(materials, 'mats'),
       );
+
+    return jsonData.slice(1).map(
+      ({
+        Region,
+        Area,
+        Territory,
+        Distribution,
+        Point,
+        ...materials
+      }: ExcelPointNdMats): FormattedPointNdMats => ({
+        point: Point,
+        material: Object.keys(materials).map((key) => ({
+          name: String(firstMatsDoc[key] || ''),
+          allocated: Number(materials[key]) || 0,
+          remaining: 0,
+          pending: Number(materials[key]) || 0,
+        })),
+      }),
+    );
   }
 
   private async fetchDatabaseMappings(campaignId: string) {
@@ -116,12 +131,12 @@ export class MaterialRepositoryService {
     campaignOid: Types.ObjectId,
   ) {
     const bulkOps = await Promise.all(
-      formattedData.map(async ({ point, material }) => {
+      formattedData.map(async ({ point, material }: FormattedPointNdMats) => {
         const pointId = pointMap.get(point);
         if (!pointId) return null;
 
-        const filter = { campaign: campaignOid, point: pointId };
-        let matsDB = await this.repositMats(filter);
+        const filter: Filter = { campaign: campaignOid, point: pointId };
+        let matsDB: MaterialAfterProcess[] = await this.repositMats(filter);
         const matsInput = this.processInputMats(material, materialMap);
 
         matsDB = this.updateMaterials(matsDB, matsInput);
@@ -151,23 +166,29 @@ export class MaterialRepositoryService {
     }
   }
 
-  private async repositMats(filter) {
+  private async repositMats(filter: Filter) {
     const materialsRepo = await this.materialRepositoryModel
       .findOne(filter)
       .select('material');
-    return materialsRepo?.material || [];
+    return (materialsRepo?.material as unknown as MaterialAfterProcess[]) || [];
   }
 
-  private processInputMats(material, materialMap) {
+  private processInputMats(
+    material: MaterialBeforProcess[],
+    materialMap: Map<string, Types.ObjectId>,
+  ) {
     return material.flatMap(({ name, allocated, remaining, pending }) => {
-      const materialId = materialMap.get(name);
+      const materialId: Types.ObjectId | undefined = materialMap.get(name);
       return materialId
         ? [{ id: materialId, allocated, remaining, pending }]
         : [];
     });
   }
 
-  private updateMaterials(matsDB: any[], matsInput: any[]) {
+  private updateMaterials(
+    matsDB: MaterialAfterProcess[],
+    matsInput: MaterialAfterProcess[],
+  ): MaterialAfterProcess[] {
     matsInput.forEach((inputItem) => {
       const existingItem = matsDB.find(
         (dbItem) => dbItem.id.toString() === inputItem.id.toString(),
