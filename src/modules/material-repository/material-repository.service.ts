@@ -125,7 +125,7 @@ export class MaterialRepositoryService {
     return jsonData;
   }
 
-  private formatExcelData(jsonData: any[]): any[] {
+  private formatExcelData(jsonData: any[]): FormattedPointNdMats[] {
     const firstMatsDoc = jsonData[0] as ExcelMaterials;
 
     return jsonData.slice(1).map(
