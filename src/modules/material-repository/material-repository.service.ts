@@ -60,6 +60,9 @@ export class MaterialRepositoryService {
     campaignId: string,
     data: PointMaterialAcceptDto[],
   ) {
+    if (data?.length < 1)
+      throw new BadRequestException('At least one item needs to accpet!');
+
     const filter = {
       point: new Types.ObjectId(pointId),
       campaign: new Types.ObjectId(campaignId),
@@ -69,14 +72,14 @@ export class MaterialRepositoryService {
       $inc: {},
     };
 
-    const arrayFilters = data?.map((item) => ({
-      'elem.id': item.materialId,
-      'elem.pending': { $gte: item.receive },
+    const arrayFilters = data?.map(({ materialId, receive }) => ({
+      'elem.id': materialId,
+      'elem.pending': { $gte: receive },
     }));
 
-    data.forEach((item) => {
-      updateDocument.$inc[`material.$[elem].remaining`] = item.receive;
-      updateDocument.$inc[`material.$[elem].pending`] = -item.receive;
+    data.forEach(({ receive }) => {
+      updateDocument.$inc[`material.$[elem].remaining`] = receive;
+      updateDocument.$inc[`material.$[elem].pending`] = -receive;
     });
 
     const options = {
