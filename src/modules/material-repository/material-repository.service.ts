@@ -8,13 +8,14 @@ import { Material } from '../material/schemas/material.schema';
 import { Point } from '../data-management/schemas/point.schema';
 import { Campaign } from '../campaign/schemas/campaign.schema';
 import {
+  ExcelMaterials,
   ExcelPointNdMats,
   Filter,
   FormattedPointNdMats,
   MaterialAfterProcess,
   MaterialBeforeProcess,
-  XLMaterials,
 } from './material-repository.entities';
+import { PointMaterialAcceptDto } from './dtos/point-material-accept.dto';
 
 @Injectable()
 export class MaterialRepositoryService {
@@ -54,6 +55,47 @@ export class MaterialRepositoryService {
     return { data: null, message: 'Request Success' };
   }
 
+  async pointMaterialAccept(
+    pointId: string,
+    campaignId: string,
+    data: PointMaterialAcceptDto[],
+  ) {
+    const filter = {
+      point: new Types.ObjectId(pointId),
+      campaign: new Types.ObjectId(campaignId),
+    };
+
+    const updateDocument = {
+      $inc: {},
+    };
+
+    const arrayFilters = data?.map((item) => ({
+      'elem.id': item.materialId,
+      'elem.pending': { $gte: item.receive },
+    }));
+
+    data.forEach((item) => {
+      updateDocument.$inc[`material.$[elem].remaining`] = item.receive;
+      updateDocument.$inc[`material.$[elem].pending`] = -item.receive;
+    });
+
+    const options = {
+      arrayFilters: arrayFilters,
+      upsert: false,
+    };
+
+    await this.materialRepositoryModel.findOneAndUpdate(
+      filter,
+      updateDocument,
+      options,
+    );
+
+    return {
+      data: null,
+      message: 'Request success',
+    };
+  }
+
   private readExcelFile(file: Express.Multer.File): XLSX.WorkBook {
     try {
       return XLSX.read(file.buffer, { type: 'buffer' });
@@ -81,7 +123,7 @@ export class MaterialRepositoryService {
   }
 
   private formatExcelData(jsonData: any[]): any[] {
-    const firstMatsDoc = jsonData[0] as XLMaterials;
+    const firstMatsDoc = jsonData[0] as ExcelMaterials;
 
     return jsonData.slice(1).map(
       ({
@@ -106,7 +148,9 @@ export class MaterialRepositoryService {
   private async fetchDatabaseMappings(campaignId: string) {
     const [dbMaterials, dbPoints, campaign] = await Promise.all([
       this.materialModel.find().select('name _id'),
-      this.pointModel.find().select('point _id'),
+      this.pointModel
+        .find({ campaigns: { $in: [campaignId] } })
+        .select('point _id'),
       this.campaignModel.findOne({ _id: campaignId }).select('_id'),
     ]);
 

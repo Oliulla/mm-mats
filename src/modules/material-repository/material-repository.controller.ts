@@ -5,12 +5,14 @@ import {
   UseInterceptors,
   Patch,
   BadRequestException,
+  Body,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { MaterialRepositoryService } from './material-repository.service';
-import { ApiBody, ApiConsumes, ApiTags } from '@nestjs/swagger';
+import { ApiBody, ApiConsumes, ApiParam, ApiTags } from '@nestjs/swagger';
 import { CreateFileUploadDto } from './dtos/create-file-upload.dto';
 import { isValidObjectId } from 'mongoose';
+import { PointMaterialAcceptDto } from './dtos/point-material-accept.dto';
 
 @ApiTags('material-repository')
 @Controller('material-repository')
@@ -19,6 +21,7 @@ export class MaterialRepositoryController {
     private readonly materialRepositoryService: MaterialRepositoryService,
   ) {}
 
+  @ApiParam({ name: 'campaignId', example: '67babd16358703a8bd184905' })
   @ApiBody({
     type: CreateFileUploadDto,
   })
@@ -40,6 +43,28 @@ export class MaterialRepositoryController {
     return this.materialRepositoryService.materialAllocationAtPoint(
       campaignId,
       file,
+    );
+  }
+
+  @ApiParam({ name: 'pointId', example: '67bac016c7637581cd846145' })
+  @ApiParam({ name: 'campaignId', example: '67babd16358703a8bd184905' })
+  @ApiBody({
+    type: [PointMaterialAcceptDto],
+  })
+  @Patch('point-material-accept/:pointId/:campaignId')
+  pointMaterialAccept(
+    @Param('pointId') pointId: string,
+    @Param('campaignId') campaignId: string,
+    @Body() data: PointMaterialAcceptDto[],
+  ) {
+    if (!isValidObjectId(pointId) || !isValidObjectId(campaignId)) {
+      throw new BadRequestException('Invalid pointId or campaignId!');
+    }
+
+    return this.materialRepositoryService.pointMaterialAccept(
+      pointId,
+      campaignId,
+      data,
     );
   }
 }

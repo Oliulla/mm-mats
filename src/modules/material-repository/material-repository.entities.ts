@@ -24,7 +24,7 @@ export type Filter = {
   point: Types.ObjectId;
 };
 
-export interface XLMaterials {
+export interface ExcelMaterials {
   [key: string]: number;
 }
 
@@ -34,7 +34,7 @@ export interface ExcelPointNdMats {
   Territory: string;
   Distribution: string;
   Point: string;
-  materials: XLMaterials;
+  materials: ExcelMaterials;
 }
 
 export interface FormattedPointNdMats {
