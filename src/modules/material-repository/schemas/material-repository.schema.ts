@@ -30,7 +30,7 @@ export class MaterialRepository {
   })
   campaign: mongoose.Schema.Types.ObjectId;
 
-  @Prop({ type: mongoose.Schema.Types.ObjectId, required: true })
+  @Prop({ type: mongoose.Schema.Types.ObjectId, required: true, ref: 'Point' })
   point: mongoose.Schema.Types.ObjectId;
 
   @Prop({ type: [MaterialSchema] })

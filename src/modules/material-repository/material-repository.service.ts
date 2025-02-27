@@ -14,6 +14,7 @@ import {
   FormattedPointNdMats,
   MaterialAfterProcess,
   MaterialBeforeProcess,
+  PointMaterialDoc,
 } from './material-repository.entities';
 import { PointMaterialAcceptDto } from './dtos/point-material-accept.dto';
 
@@ -55,7 +56,80 @@ export class MaterialRepositoryService {
     return { data: null, message: 'Request Success' };
   }
 
-  async pointMaterialAccept(
+  async pointMaterialAcceptGet(pointId: string, campaignId: string) {
+    try {
+      const filter = {
+        point: new Types.ObjectId(pointId),
+        campaign: new Types.ObjectId(campaignId),
+      };
+
+      const pointMaterials: any[] = await this.materialRepositoryModel
+        .find(filter)
+        .populate({
+          path: 'campaign',
+          select: 'name',
+        })
+        .populate({
+          path: 'point',
+          select: 'region area territory dh point',
+        })
+        .populate({
+          path: 'material.id',
+          select: 'name category company',
+        })
+        .exec();
+
+      const transformedData = pointMaterials.map(
+        (pointMaterial: PointMaterialDoc) => {
+          return {
+            _id: pointMaterial._id,
+            campaign: {
+              id: pointMaterial.campaign._id,
+              name: pointMaterial.campaign.name,
+            },
+            point: {
+              region: pointMaterial.point.region,
+              area: pointMaterial.point.area,
+              territory: pointMaterial.point.territory,
+              dh: pointMaterial.point.dh,
+              name: pointMaterial.point.point,
+              id: pointMaterial.point._id,
+            },
+            material: pointMaterial.material
+              .filter((material) => material.pending > 0)
+              .map((material) => ({
+                name: material.id.name,
+                company: material.id.company,
+                category: material.id.category,
+                allocated: material.allocated,
+                remaining: material.remaining,
+                pending: material.pending,
+                id: material.id._id,
+              })),
+          };
+        },
+      );
+
+      return {
+        data: transformedData,
+        message: 'Request success!',
+      };
+    } catch (error) {
+      if (error instanceof Error) {
+        return {
+          data: null,
+          message: `Error: ${error.message}`,
+        };
+      } else {
+        return {
+          data: null,
+          message: 'Unknown error occurred',
+        };
+      }
+    }
+  }
+
+  async pointMaterialAcceptPatch(
     pointId: string,
     campaignId: string,
     data: PointMaterialAcceptDto[],

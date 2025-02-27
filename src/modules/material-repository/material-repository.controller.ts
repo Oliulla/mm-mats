@@ -6,6 +6,7 @@ import {
   Patch,
   BadRequestException,
   Body,
+  Get,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { MaterialRepositoryService } from './material-repository.service';
@@ -48,11 +49,28 @@ export class MaterialRepositoryController {
 
   @ApiParam({ name: 'pointId', example: '67bac016c7637581cd846145' })
   @ApiParam({ name: 'campaignId', example: '67babd16358703a8bd184905' })
+  @Get('point-material-accept/:pointId/:campaignId')
+  pointMaterialAcceptGet(
+    @Param('pointId') pointId: string,
+    @Param('campaignId') campaignId: string,
+  ) {
+    if (!isValidObjectId(pointId) || !isValidObjectId(campaignId)) {
+      throw new BadRequestException('Invalid pointId or campaignId!');
+    }
+
+    return this.materialRepositoryService.pointMaterialAcceptGet(
+      pointId,
+      campaignId,
+    );
+  }
+
+  @ApiParam({ name: 'pointId', example: '67bac016c7637581cd846145' })
+  @ApiParam({ name: 'campaignId', example: '67babd16358703a8bd184905' })
   @ApiBody({
     type: [PointMaterialAcceptDto],
   })
   @Patch('point-material-accept/:pointId/:campaignId')
-  pointMaterialAccept(
+  pointMaterialAcceptPatch(
     @Param('pointId') pointId: string,
     @Param('campaignId') campaignId: string,
     @Body() data: PointMaterialAcceptDto[],
@@ -61,7 +79,7 @@ export class MaterialRepositoryController {
       throw new BadRequestException('Invalid pointId or campaignId!');
     }
 
-    return this.materialRepositoryService.pointMaterialAccept(
+    return this.materialRepositoryService.pointMaterialAcceptPatch(
       pointId,
       campaignId,
       data,

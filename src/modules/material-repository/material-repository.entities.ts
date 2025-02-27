@@ -41,3 +41,30 @@ export interface FormattedPointNdMats {
   point: string;
   materials: MaterialBeforeProcess[];
 }
+
+export interface PointMaterialDoc {
+  _id: string;
+  campaign: {
+    _id: string;
+    name: string;
+  };
+  point: {
+    region: string;
+    area: string;
+    territory: string;
+    dh: string;
+    point: string;
+    _id: string;
+  };
+  material: {
+    id: {
+      name: string;
+      company: string;
+      category: string;
+      _id: string;
+    };
+    allocated: number;
+    remaining: number;
+    pending: number;
+  }[];
+}
