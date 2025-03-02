@@ -12,13 +12,17 @@ import {
   ExcelPointNdMats,
   Filter,
   FormattedPointNdMats,
+  FormattedUserPointNdMats,
   MaterialAfterProcess,
   MaterialBeforeProcess,
+  MaterialBeforeProcessForUser,
+  MaterialRepositoryKind,
   PointMaterialDoc,
 } from './material-repository.entities';
 import { PointMaterialAcceptDto } from './dtos/point-material-accept.dto';
 import { PointMaterialRepository } from './schemas/point-material-repository.schema';
 import { UserMaterialRepository } from './schemas/user-material-repository.schema';
+import { UserMaterialAssignDto } from './dtos/user-material-assign.dto';
 
 @Injectable()
 export class MaterialRepositoryService {
@@ -46,6 +50,7 @@ export class MaterialRepositoryService {
     campaignId: string,
     file: Express.Multer.File,
   ) {
+    const actionFor = MaterialRepositoryKind.POINT;
     const workbook = this.readExcelFile(file);
     const jsonData = this.parseSheetData(workbook);
     const formattedData = this.formatExcelData(jsonData);
@@ -60,6 +65,7 @@ export class MaterialRepositoryService {
       materialMap,
       pointMap,
       campaignOid,
+      actionFor,
     );
     return { data: null, message: 'Request Success' };
   }
@@ -181,6 +187,37 @@ export class MaterialRepositoryService {
     };
   }
 
+  async userMaterialAssignPatch(
+    pointId: string,
+    campaignId: string,
+    data: UserMaterialAssignDto[],
+  ) {
+    const actionFor = MaterialRepositoryKind.USER;
+
+    const point = await this.pointModel.findById(pointId);
+
+    const formattedData = data.map((dt) => ({
+      materials: dt.material,
+      user: dt.userId,
+      point: point?.point,
+    }));
+
+    const mappings = await this.fetchDatabaseMappings(campaignId);
+    const materialMap = mappings[0] as Map<string, Types.ObjectId>;
+    const pointMap = mappings[1] as Map<string, Types.ObjectId>;
+    const campaignOid = mappings[2] as Types.ObjectId;
+
+    await this.performBulkWriteOperations(
+      formattedData,
+      materialMap,
+      pointMap,
+      campaignOid,
+      actionFor,
+    );
+
+    return { data: null, message: 'Request Success' };
+  }
+
   private readExcelFile(file: Express.Multer.File): XLSX.WorkBook {
     try {
       return XLSX.read(file.buffer, { type: 'buffer' });
@@ -251,44 +288,102 @@ export class MaterialRepositoryService {
     materialMap: Map<string, Types.ObjectId>,
     pointMap: Map<string, Types.ObjectId>,
     campaignOid: Types.ObjectId,
+    actionFor: string,
   ) {
-    const bulkOps = await Promise.all(
-      formattedData.map(async ({ point, materials }: FormattedPointNdMats) => {
-        const pointId = pointMap.get(point);
-        if (!pointId) return null;
+    if (actionFor === String(MaterialRepositoryKind.POINT)) {
+      const bulkOps = await Promise.all(
+        formattedData.map(
+          async ({ point, materials }: FormattedPointNdMats) => {
+            const pointId = pointMap.get(point);
+            if (!pointId) return null;
 
-        const filter: Filter = { campaign: campaignOid, point: pointId };
-        let matsDB: MaterialAfterProcess[] = await this.repositMats(filter);
-        const matsInput = this.processInputMats(materials, materialMap);
+            const filter: Partial<Filter> = {
+              campaign: campaignOid,
+              point: pointId,
+            };
+            let matsDB: MaterialAfterProcess[] = await this.repositMats(filter);
+            const matsInput = this.processInputMats(
+              materials,
+              materialMap,
+              actionFor,
+            );
 
-        matsDB = this.updateMaterials(matsDB, matsInput);
+            matsDB = this.updateMaterials(matsDB, matsInput);
 
-        return matsInput.length > 0
-          ? {
-              updateOne: {
-                filter,
-                update: {
-                  $set: {
-                    campaign: campaignOid,
-                    point: pointId,
-                    material: matsDB,
+            return matsInput.length > 0
+              ? {
+                  updateOne: {
+                    filter,
+                    update: {
+                      $set: {
+                        campaign: campaignOid,
+                        point: pointId,
+                        material: matsDB,
+                      },
+                    },
+                    upsert: true,
                   },
-                },
-                upsert: true,
-              },
-            }
-          : null;
-      }),
-    );
+                }
+              : null;
+          },
+        ),
+      );
 
-    const validOps = bulkOps.filter((op) => op !== null);
+      const validOps = bulkOps.filter((op) => op !== null);
 
-    if (validOps.length > 0) {
-      await this.pointMaterialRepositoryModel.bulkWrite(validOps);
+      if (validOps.length > 0) {
+        await this.pointMaterialRepositoryModel.bulkWrite(validOps);
+      }
+    } else {
+      const bulkOps = await Promise.all(
+        formattedData.map(
+          async ({ user, point, materials }: FormattedUserPointNdMats) => {
+            const pointId = pointMap.get(point);
+            if (!pointId) return null;
+
+            const filter: Filter = {
+              campaign: campaignOid,
+              point: pointId,
+              user: new Types.ObjectId(user),
+            };
+            let matsDB: MaterialAfterProcess[] = await this.repositMats(filter);
+
+            const matsInput = this.processInputMats(
+              materials,
+              materialMap,
+              actionFor,
+            );
+
+            matsDB = this.updateMaterials(matsDB, matsInput);
+
+            return matsInput.length > 0
+              ? {
+                  updateOne: {
+                    filter,
+                    update: {
+                      $set: {
+                        campaign: campaignOid,
+                        point: pointId,
+                        user: user,
+                        material: matsDB,
+                      },
+                    },
+                    upsert: true,
+                  },
+                }
+              : null;
+          },
+        ),
+      );
+      const validOps = bulkOps.filter((op) => op !== null);
+
+      if (validOps.length > 0) {
+        await this.userMaterialRepositoryModel.bulkWrite(validOps);
+      }
     }
   }
 
-  private async repositMats(filter: Filter) {
+  private async repositMats(filter: Partial<Filter>) {
     const materialsRepo = await this.pointMaterialRepositoryModel
       .findOne(filter)
       .select('material');
@@ -296,15 +391,28 @@ export class MaterialRepositoryService {
   }
 
   private processInputMats(
-    material: MaterialBeforeProcess[],
+    material: any[],
     materialMap: Map<string, Types.ObjectId>,
+    actionFor: string,
   ) {
-    return material.flatMap(({ name, allocated, remaining, pending }) => {
-      const materialId: Types.ObjectId | undefined = materialMap.get(name);
-      return materialId
-        ? [{ id: materialId, allocated, remaining, pending }]
-        : [];
-    });
+    if (actionFor === String(MaterialRepositoryKind.USER)) {
+      return material.flatMap(
+        ({ id, quantity }: MaterialBeforeProcessForUser) => {
+          return id
+            ? [{ id: id, allocated: quantity, remaining: 0, pending: quantity }]
+            : [];
+        },
+      );
+    } else {
+      return material.flatMap(
+        ({ name, allocated, remaining, pending }: MaterialBeforeProcess) => {
+          const materialId: Types.ObjectId | undefined = materialMap.get(name);
+          return materialId
+            ? [{ id: materialId, allocated, remaining, pending }]
+            : [];
+        },
+      );
+    }
   }
 
   private updateMaterials(

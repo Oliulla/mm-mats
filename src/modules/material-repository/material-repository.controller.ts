@@ -14,6 +14,7 @@ import { ApiBody, ApiConsumes, ApiParam, ApiTags } from '@nestjs/swagger';
 import { CreateFileUploadDto } from './dtos/create-file-upload.dto';
 import { isValidObjectId } from 'mongoose';
 import { PointMaterialAcceptDto } from './dtos/point-material-accept.dto';
+import { UserMaterialAssignDto } from './dtos/user-material-assign.dto';
 
 @ApiTags('material-repository')
 @Controller('material-repository')
@@ -80,6 +81,28 @@ export class MaterialRepositoryController {
     }
 
     return this.materialRepositoryService.pointMaterialAcceptPatch(
+      pointId,
+      campaignId,
+      data,
+    );
+  }
+
+  @ApiParam({ name: 'pointId', example: '67bac016c7637581cd846145' })
+  @ApiParam({ name: 'campaignId', example: '67babd16358703a8bd184905' })
+  @ApiBody({
+    type: [UserMaterialAssignDto],
+  })
+  @Patch('user-material-assign/:pointId/:campaignId')
+  userMaterialAssignPatch(
+    @Param('pointId') pointId: string,
+    @Param('campaignId') campaignId: string,
+    @Body() data: UserMaterialAssignDto[],
+  ) {
+    if (!isValidObjectId(pointId) || !isValidObjectId(campaignId)) {
+      throw new BadRequestException('Invalid pointId or campaignId!');
+    }
+
+    return this.materialRepositoryService.userMaterialAssignPatch(
       pointId,
       campaignId,
       data,

@@ -19,9 +19,15 @@ export interface MaterialBeforeProcess {
   pending: number;
 }
 
+export interface MaterialBeforeProcessForUser {
+  id: Types.ObjectId;
+  quantity: number;
+}
+
 export type Filter = {
   campaign: Types.ObjectId;
   point: Types.ObjectId;
+  user: Types.ObjectId;
 };
 
 export interface ExcelMaterials {
@@ -38,6 +44,12 @@ export interface ExcelPointNdMats {
 }
 
 export interface FormattedPointNdMats {
+  point: string;
+  materials: MaterialBeforeProcess[];
+}
+
+export interface FormattedUserPointNdMats {
+  user: string;
   point: string;
   materials: MaterialBeforeProcess[];
 }
