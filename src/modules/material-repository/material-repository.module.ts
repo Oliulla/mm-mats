@@ -9,11 +9,35 @@ import { MaterialRepositoryService } from './material-repository.service';
 import { Material, MaterialSchema } from '../material/schemas/material.schema';
 import { Point, PointSchema } from '../data-management/schemas/point.schema';
 import { Campaign, CampaignSchema } from '../campaign/schemas/campaign.schema';
+import {
+  PointMaterialRepository,
+  PointMaterialRepositorySchema,
+} from './schemas/point-material-repository.schema';
+import { MaterialRepositoryKind } from './material-repository.entities';
+import {
+  UserMaterialRepository,
+  UserMaterialRepositorySchema,
+} from './schemas/user-material-repository.schema';
 
 @Module({
   imports: [
     MongooseModule.forFeature([
-      { name: MaterialRepository.name, schema: MaterialRepositorySchema },
+      {
+        name: MaterialRepository.name,
+        schema: MaterialRepositorySchema,
+        discriminators: [
+          {
+            name: PointMaterialRepository.name,
+            schema: PointMaterialRepositorySchema,
+            value: MaterialRepositoryKind.POINT,
+          },
+          {
+            name: UserMaterialRepository.name,
+            schema: UserMaterialRepositorySchema,
+            value: MaterialRepositoryKind.USER,
+          },
+        ],
+      },
       {
         name: Material.name,
         schema: MaterialSchema,

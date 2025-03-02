@@ -17,12 +17,20 @@ import {
   PointMaterialDoc,
 } from './material-repository.entities';
 import { PointMaterialAcceptDto } from './dtos/point-material-accept.dto';
+import { PointMaterialRepository } from './schemas/point-material-repository.schema';
+import { UserMaterialRepository } from './schemas/user-material-repository.schema';
 
 @Injectable()
 export class MaterialRepositoryService {
   constructor(
     @InjectModel(MaterialRepository.name)
     private readonly materialRepositoryModel: Model<MaterialRepository>,
+
+    @InjectModel(PointMaterialRepository.name)
+    private readonly pointMaterialRepositoryModel: Model<PointMaterialRepository>,
+
+    @InjectModel(UserMaterialRepository.name)
+    private readonly userMaterialRepositoryModel: Model<UserMaterialRepository>,
 
     @InjectModel(Material.name)
     private readonly materialModel: Model<Material>,
@@ -63,7 +71,7 @@ export class MaterialRepositoryService {
         campaign: new Types.ObjectId(campaignId),
       };
 
-      const pointMaterials: any[] = await this.materialRepositoryModel
+      const pointMaterials: any[] = await this.pointMaterialRepositoryModel
         .find(filter)
         .populate({
           path: 'campaign',
@@ -161,7 +169,7 @@ export class MaterialRepositoryService {
       upsert: false,
     };
 
-    await this.materialRepositoryModel.findOneAndUpdate(
+    await this.pointMaterialRepositoryModel.findOneAndUpdate(
       filter,
       updateDocument,
       options,
@@ -276,12 +284,12 @@ export class MaterialRepositoryService {
     const validOps = bulkOps.filter((op) => op !== null);
 
     if (validOps.length > 0) {
-      await this.materialRepositoryModel.bulkWrite(validOps);
+      await this.pointMaterialRepositoryModel.bulkWrite(validOps);
     }
   }
 
   private async repositMats(filter: Filter) {
-    const materialsRepo = await this.materialRepositoryModel
+    const materialsRepo = await this.pointMaterialRepositoryModel
       .findOne(filter)
       .select('material');
     return (materialsRepo?.material as unknown as MaterialAfterProcess[]) || [];

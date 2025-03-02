@@ -1,27 +1,8 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import * as mongoose from 'mongoose';
+import { MaterialRepositoryKind } from '../material-repository.entities';
 
-@Schema({ _id: false })
-class Material {
-  @Prop({
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Material',
-    required: true,
-  })
-  id: mongoose.Schema.Types.ObjectId;
-
-  @Prop({ default: 0 })
-  allocated: number;
-
-  @Prop({ default: 0 })
-  remaining: number;
-
-  @Prop({ default: 0 })
-  pending: number;
-}
-const MaterialSchema = SchemaFactory.createForClass(Material);
-
-@Schema({ timestamps: true })
+@Schema({ timestamps: true, discriminatorKey: 'kind' })
 export class MaterialRepository {
   @Prop({
     type: mongoose.Schema.Types.ObjectId,
@@ -33,8 +14,12 @@ export class MaterialRepository {
   @Prop({ type: mongoose.Schema.Types.ObjectId, required: true, ref: 'Point' })
   point: mongoose.Schema.Types.ObjectId;
 
-  @Prop({ type: [MaterialSchema] })
-  material: Material[];
+  @Prop({
+    type: String,
+    enum: [MaterialRepositoryKind.POINT, MaterialRepositoryKind.USER],
+    required: true,
+  })
+  kind: MaterialRepositoryKind;
 }
 
 export const MaterialRepositorySchema =
