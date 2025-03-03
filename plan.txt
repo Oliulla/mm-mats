@@ -2,4 +2,4 @@
 * Have to bulkwrite for update based on point and campaign. Only one document will be created or updated for each campaign and point 
 * Allocated and pending won't be replace for existant materials. If already materials have in any point and campaign its allocated and pending
     sum with previous allocated and pending value. Otherwise it would be set in materials array.
-* 
+* Next, I have to create API for user accept materials and rejecet materials.
