@@ -1,3 +1,8 @@
+/* eslint-disable @typescript-eslint/no-base-to-string */
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-call */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
@@ -193,10 +198,8 @@ export class MaterialRepositoryService {
     data: UserMaterialAssignDto[],
   ) {
     const actionFor = MaterialRepositoryKind.USER;
-
     const point = await this.pointModel.findById(pointId);
-
-    const formattedData = data.map((dt) => ({
+    const formattedData: any[] = data.map((dt) => ({
       materials: dt.material,
       user: dt.userId,
       point: point?.point,
@@ -284,7 +287,7 @@ export class MaterialRepositoryService {
   }
 
   private async performBulkWriteOperations(
-    formattedData: any[],
+    formattedData: (FormattedPointNdMats | FormattedUserPointNdMats)[],
     materialMap: Map<string, Types.ObjectId>,
     pointMap: Map<string, Types.ObjectId>,
     campaignOid: Types.ObjectId,
@@ -301,7 +304,11 @@ export class MaterialRepositoryService {
               campaign: campaignOid,
               point: pointId,
             };
-            let matsDB: MaterialAfterProcess[] = await this.repositMats(filter);
+            const model = this.pointMaterialRepositoryModel;
+            let matsDB: MaterialAfterProcess[] = await this.repositMats(
+              filter,
+              model,
+            );
             const matsInput = this.processInputMats(
               materials,
               materialMap,
@@ -332,7 +339,7 @@ export class MaterialRepositoryService {
       const validOps = bulkOps.filter((op) => op !== null);
 
       if (validOps.length > 0) {
-        await this.pointMaterialRepositoryModel.bulkWrite(validOps);
+        await this.pointMaterialRepositoryModel.bulkWrite(validOps as any);
       }
     } else {
       const bulkOps = await Promise.all(
@@ -346,17 +353,39 @@ export class MaterialRepositoryService {
               point: pointId,
               user: new Types.ObjectId(user),
             };
-            let matsDB: MaterialAfterProcess[] = await this.repositMats(filter);
+            const model = this.userMaterialRepositoryModel;
+            let matsDB: MaterialAfterProcess[] = await this.repositMats(
+              filter,
+              model,
+            );
 
             const matsInput = this.processInputMats(
               materials,
               materialMap,
               actionFor,
             );
-
             matsDB = this.updateMaterials(matsDB, matsInput);
 
-            return matsInput.length > 0
+            const searchMaterials =
+              await this.pointMaterialRepositoryModel.findOne({
+                point: pointId,
+                campaign: campaignOid,
+                kind: 'Point',
+              });
+            const existingPointMats = searchMaterials?.material;
+
+            const matchedMats = matsDB?.filter((dbMat) => {
+              const matchingPointMat = existingPointMats?.find(
+                (existing) => String(existing.id) === String(dbMat.id),
+              );
+
+              return (
+                matchingPointMat &&
+                matchingPointMat.remaining >= dbMat.allocated
+              );
+            });
+
+            return matchedMats.length > 0
               ? {
                   updateOne: {
                     filter,
@@ -365,7 +394,7 @@ export class MaterialRepositoryService {
                         campaign: campaignOid,
                         point: pointId,
                         user: user,
-                        material: matsDB,
+                        material: matchedMats,
                       },
                     },
                     upsert: true,
@@ -375,19 +404,21 @@ export class MaterialRepositoryService {
           },
         ),
       );
+
       const validOps = bulkOps.filter((op) => op !== null);
 
       if (validOps.length > 0) {
-        await this.userMaterialRepositoryModel.bulkWrite(validOps);
+        await this.userMaterialRepositoryModel.bulkWrite(validOps as any);
       }
     }
   }
 
-  private async repositMats(filter: Partial<Filter>) {
-    const materialsRepo = await this.pointMaterialRepositoryModel
-      .findOne(filter)
-      .select('material');
-    return (materialsRepo?.material as unknown as MaterialAfterProcess[]) || [];
+  private async repositMats(
+    filter: Partial<Filter>,
+    model: any,
+  ): Promise<MaterialAfterProcess[]> {
+    const materialsRepo = await model.findOne(filter).select('material');
+    return (materialsRepo?.material as MaterialAfterProcess[]) || [];
   }
 
   private processInputMats(
@@ -433,5 +464,41 @@ export class MaterialRepositoryService {
     });
 
     return matsDB;
+  }
+
+  private async pointMaterialRemainingDecreaseing(
+    data: { materialId?: string; qty: number }[],
+    pointId: string,
+    campaignId: string,
+    kind: string,
+  ) {
+    const filter = {
+      point: new Types.ObjectId(pointId),
+      campaign: new Types.ObjectId(campaignId),
+      kind,
+    };
+
+    const updateDocument = {
+      $inc: {},
+    };
+
+    const arrayFilters = data?.map(({ materialId }) => ({
+      'elem.id': materialId,
+    }));
+
+    data.forEach(({ qty }) => {
+      updateDocument.$inc[`material.$[elem].remaining`] = -qty;
+    });
+
+    const options = {
+      arrayFilters: arrayFilters,
+      upsert: false,
+    };
+
+    await this.pointMaterialRepositoryModel.findOneAndUpdate(
+      filter,
+      updateDocument,
+      options,
+    );
   }
 }
