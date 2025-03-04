@@ -313,11 +313,14 @@ export class MaterialRepositoryService {
         await this.pointMaterialRepositoryModel.bulkWrite(validOps as any);
       }
     } else {
+      let matchedMats: any[] = [];
+      let setPointId;
       const bulkOps = await Promise.all(
         formattedData.map(
           async ({ user, point, materials }: FormattedUserPointNdMats) => {
             const pointId = pointMap.get(point);
             if (!pointId) return null;
+            setPointId = pointId;
 
             const filter: Filter = {
               campaign: campaignOid,
@@ -335,17 +338,15 @@ export class MaterialRepositoryService {
               materialMap,
               actionFor,
             );
-            matsDB = this.updateMaterials(matsDB, matsInput);
 
             const searchMaterials =
               await this.pointMaterialRepositoryModel.findOne({
                 point: pointId,
                 campaign: campaignOid,
-                kind: 'Point',
               });
             const existingPointMats = searchMaterials?.material;
 
-            const matchedMats = matsDB?.filter((dbMat) => {
+            matchedMats = matsInput?.filter((dbMat) => {
               const matchingPointMat = existingPointMats?.find(
                 (existing) => String(existing.id) === String(dbMat.id),
               );
@@ -356,7 +357,9 @@ export class MaterialRepositoryService {
               );
             });
 
-            return matchedMats.length > 0
+            matsDB = this.updateMaterials(matsDB, matchedMats);
+
+            return matsDB?.length > 0
               ? {
                   updateOne: {
                     filter,
@@ -365,7 +368,7 @@ export class MaterialRepositoryService {
                         campaign: campaignOid,
                         point: pointId,
                         user: user,
-                        material: matchedMats,
+                        material: matsDB,
                       },
                     },
                     upsert: true,
@@ -379,7 +382,22 @@ export class MaterialRepositoryService {
       const validOps = bulkOps.filter((op) => op !== null);
 
       if (validOps.length > 0) {
-        await this.userMaterialRepositoryModel.bulkWrite(validOps as any);
+        const res = await this.userMaterialRepositoryModel.bulkWrite(
+          validOps as any,
+        );
+
+        if (res) {
+          const data = matchedMats?.map((mt) => ({
+            materialId: mt.id,
+            qty: mt.allocated,
+          }));
+
+          await this.pointMaterialRemainingDecreasing(
+            data,
+            String(setPointId),
+            String(campaignOid),
+          );
+        }
       }
     }
   }
@@ -437,16 +455,14 @@ export class MaterialRepositoryService {
     return matsDB;
   }
 
-  private async pointMaterialRemainingDecreaseing(
+  private async pointMaterialRemainingDecreasing(
     data: { materialId?: string; qty: number }[],
     pointId: string,
     campaignId: string,
-    kind: string,
   ) {
     const filter = {
       point: new Types.ObjectId(pointId),
       campaign: new Types.ObjectId(campaignId),
-      kind,
     };
 
     const updateDocument = {
