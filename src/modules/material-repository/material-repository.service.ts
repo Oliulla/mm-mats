@@ -22,12 +22,12 @@ import {
   MaterialBeforeProcess,
   MaterialBeforeProcessForUser,
   MaterialRepositoryKind,
-  PointMaterialDoc,
 } from './material-repository.entities';
 import { PointMaterialAcceptDto } from './dtos/point-material-accept.dto';
 import { PointMaterialRepository } from './schemas/point-material-repository.schema';
 import { UserMaterialRepository } from './schemas/user-material-repository.schema';
 import { UserMaterialAssignDto } from './dtos/user-material-assign.dto';
+import { pointMaterialDataTransformer } from './material-repository.constants';
 
 @Injectable()
 export class MaterialRepositoryService {
@@ -98,36 +98,7 @@ export class MaterialRepositoryService {
         })
         .exec();
 
-      const transformedData = pointMaterials.map(
-        (pointMaterial: PointMaterialDoc) => {
-          return {
-            _id: pointMaterial._id,
-            campaign: {
-              id: pointMaterial.campaign._id,
-              name: pointMaterial.campaign.name,
-            },
-            point: {
-              region: pointMaterial.point.region,
-              area: pointMaterial.point.area,
-              territory: pointMaterial.point.territory,
-              dh: pointMaterial.point.dh,
-              name: pointMaterial.point.point,
-              id: pointMaterial.point._id,
-            },
-            material: pointMaterial.material
-              .filter((material) => material.pending > 0)
-              .map((material) => ({
-                name: material.id.name,
-                company: material.id.company,
-                category: material.id.category,
-                allocated: material.allocated,
-                remaining: material.remaining,
-                pending: material.pending,
-                id: material.id._id,
-              })),
-          };
-        },
-      );
+      const transformedData = pointMaterialDataTransformer(pointMaterials);
 
       return {
         data: transformedData,
@@ -452,7 +423,7 @@ export class MaterialRepositoryService {
   ): MaterialAfterProcess[] {
     matsInput.forEach((inputItem) => {
       const existingItem = matsDB.find(
-        (dbItem) => dbItem.id.toString() === inputItem.id.toString(),
+        (dbItem) => String(dbItem.id) === String(inputItem.id),
       );
 
       if (existingItem) {
