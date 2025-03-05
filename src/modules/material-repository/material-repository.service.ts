@@ -136,14 +136,14 @@ export class MaterialRepositoryService {
       $inc: {},
     };
 
-    const arrayFilters = data?.map(({ materialId, receive }) => ({
-      'elem.id': materialId,
-      'elem.pending': { $gte: receive },
+    const arrayFilters = data?.map(({ materialId, receive }, idx) => ({
+      [`elem${idx}.id`]: materialId,
+      [`elem${idx}.pending`]: { $gte: receive },
     }));
 
-    data.forEach(({ receive }) => {
-      updateDocument.$inc[`material.$[elem].remaining`] = receive;
-      updateDocument.$inc[`material.$[elem].pending`] = -receive;
+    data.forEach(({ receive }, idx) => {
+      updateDocument.$inc[`material.$[elem${idx}].remaining`] = receive;
+      updateDocument.$inc[`material.$[elem${idx}].pending`] = -receive;
     });
 
     const options = {
@@ -465,16 +465,16 @@ export class MaterialRepositoryService {
       campaign: new Types.ObjectId(campaignId),
     };
 
+    const arrayFilters = data?.map(({ materialId }, idx) => ({
+      [`elem${idx}.id`]: materialId,
+    }));
+
     const updateDocument = {
       $inc: {},
     };
 
-    const arrayFilters = data?.map(({ materialId }) => ({
-      'elem.id': materialId,
-    }));
-
-    data.forEach(({ qty }) => {
-      updateDocument.$inc[`material.$[elem].remaining`] = -qty;
+    data.forEach(({ qty }, idx) => {
+      updateDocument.$inc[`material.$[elem${idx}].remaining`] = -qty;
     });
 
     const options = {
