@@ -25,6 +25,7 @@ export interface MaterialBeforeProcessForUser {
 }
 
 export type Filter = {
+  docId: Types.ObjectId;
   campaign: Types.ObjectId;
   point: Types.ObjectId;
   user: Types.ObjectId;
@@ -79,4 +80,9 @@ export interface PointMaterialDoc {
     remaining: number;
     pending: number;
   }[];
+}
+
+export enum ActionType {
+  ACCEPT = 'accept',
+  CANCEL = 'cancel',
 }

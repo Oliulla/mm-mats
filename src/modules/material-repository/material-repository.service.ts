@@ -13,6 +13,7 @@ import { Material } from '../material/schemas/material.schema';
 import { Point } from '../data-management/schemas/point.schema';
 import { Campaign } from '../campaign/schemas/campaign.schema';
 import {
+  ActionType,
   ExcelMaterials,
   ExcelPointNdMats,
   Filter,
@@ -28,6 +29,7 @@ import { PointMaterialRepository } from './schemas/point-material-repository.sch
 import { UserMaterialRepository } from './schemas/user-material-repository.schema';
 import { UserMaterialAssignDto } from './dtos/user-material-assign.dto';
 import { pointMaterialDataTransformer } from './material-repository.constants';
+import { UserMaterialConfirmRCancelPatchDto } from './dtos/user-material-confirm.dto';
 
 @Injectable()
 export class MaterialRepositoryService {
@@ -136,14 +138,14 @@ export class MaterialRepositoryService {
       $inc: {},
     };
 
-    const arrayFilters = data?.map(({ materialId, receive }, idx) => ({
+    const arrayFilters = data?.map(({ materialId, quantity }, idx) => ({
       [`elem${idx}.id`]: materialId,
-      [`elem${idx}.pending`]: { $gte: receive },
+      [`elem${idx}.pending`]: { $gte: quantity },
     }));
 
-    data.forEach(({ receive }, idx) => {
-      updateDocument.$inc[`material.$[elem${idx}].remaining`] = receive;
-      updateDocument.$inc[`material.$[elem${idx}].pending`] = -receive;
+    data.forEach(({ quantity }, idx) => {
+      updateDocument.$inc[`material.$[elem${idx}].remaining`] = quantity;
+      updateDocument.$inc[`material.$[elem${idx}].pending`] = -quantity;
     });
 
     const options = {
@@ -190,6 +192,70 @@ export class MaterialRepositoryService {
     );
 
     return { data: null, message: 'Request Success' };
+  }
+
+  async userAllocatedMaterialConfirmRCancelPatch(
+    pointId: string,
+    campaignId: string,
+    actionType: ActionType,
+    data: UserMaterialConfirmRCancelPatchDto[],
+  ) {
+    if (!actionType) throw new BadRequestException('Action Type is required!');
+    if (!data || data.length < 1)
+      throw new BadRequestException('At least one item needs to accept!');
+
+    const filter = {
+      point: new Types.ObjectId(pointId),
+      campaign: new Types.ObjectId(campaignId),
+    };
+
+    const updateDocumentPoint = { $inc: {} };
+    const updateDocumentUser = { $inc: {} };
+
+    const arrayFilters = data.map(({ materialId, quantity }, idx) => ({
+      [`elem${idx}.id`]: materialId,
+      ...(actionType === ActionType.ACCEPT && {
+        [`elem${idx}.pending`]: { $gte: quantity },
+      }),
+    }));
+
+    if (actionType === ActionType.ACCEPT) {
+      data.forEach(({ quantity }, idx) => {
+        updateDocumentUser.$inc[`material.$[elem${idx}].remaining`] = quantity;
+        updateDocumentUser.$inc[`material.$[elem${idx}].pending`] = -quantity;
+      });
+    } else {
+      data.forEach(({ quantity }, idx) => {
+        updateDocumentPoint.$inc[`material.$[elem${idx}].remaining`] = quantity;
+
+        updateDocumentUser.$inc[`material.$[elem${idx}].allocated`] = -quantity;
+        updateDocumentUser.$inc[`material.$[elem${idx}].pending`] = -quantity;
+      });
+    }
+
+    const options = {
+      arrayFilters,
+      upsert: false,
+    };
+
+    await this.userMaterialRepositoryModel.findOneAndUpdate(
+      filter,
+      updateDocumentUser,
+      options,
+    );
+
+    if (actionType !== ActionType.ACCEPT) {
+      await this.pointMaterialRepositoryModel.findOneAndUpdate(
+        filter,
+        updateDocumentPoint,
+        options,
+      );
+    }
+
+    return {
+      data: null,
+      message: 'Request success',
+    };
   }
 
   private readExcelFile(file: Express.Multer.File): XLSX.WorkBook {
@@ -322,7 +388,7 @@ export class MaterialRepositoryService {
             if (!pointId) return null;
             setPointId = pointId;
 
-            const filter: Filter = {
+            const filter: Partial<Filter> = {
               campaign: campaignOid,
               point: pointId,
               user: new Types.ObjectId(user),

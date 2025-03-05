@@ -15,6 +15,8 @@ import { CreateFileUploadDto } from './dtos/create-file-upload.dto';
 import { isValidObjectId } from 'mongoose';
 import { PointMaterialAcceptDto } from './dtos/point-material-accept.dto';
 import { UserMaterialAssignDto } from './dtos/user-material-assign.dto';
+import { UserMaterialConfirmRCancelPatchDto } from './dtos/user-material-confirm.dto';
+import { ActionType } from './material-repository.entities';
 
 @ApiTags('material-repository')
 @Controller('material-repository')
@@ -105,6 +107,36 @@ export class MaterialRepositoryController {
     return this.materialRepositoryService.userMaterialAssignPatch(
       pointId,
       campaignId,
+      data,
+    );
+  }
+
+  @ApiParam({ name: 'pointId', example: '67bac016c7637581cd846145' })
+  @ApiParam({ name: 'campaignId', example: '67babd16358703a8bd184905' })
+  @ApiParam({
+    name: 'actionType',
+    example: ActionType.ACCEPT,
+    enum: ActionType,
+  })
+  @ApiBody({
+    type: UserMaterialConfirmRCancelPatchDto,
+    isArray: true,
+  })
+  @Patch('user-allocated-material/:pointId/:campaignId/:actionType')
+  userAllocatedMaterialConfirmRCancelPatch(
+    @Param('pointId') pointId: string,
+    @Param('campaignId') campaignId: string,
+    @Param('actionType') actionType: ActionType,
+    @Body() data: UserMaterialConfirmRCancelPatchDto[],
+  ) {
+    if (!isValidObjectId(pointId) || !isValidObjectId(campaignId)) {
+      throw new BadRequestException('Invalid point or campaign Id!');
+    }
+
+    return this.materialRepositoryService.userAllocatedMaterialConfirmRCancelPatch(
+      pointId,
+      campaignId,
+      actionType,
       data,
     );
   }

@@ -2,7 +2,7 @@ import { ApiProperty } from '@nestjs/swagger';
 import { IsMongoId, IsNotEmpty, IsNumber } from 'class-validator';
 import * as mongoose from 'mongoose';
 
-export class PointMaterialAcceptDto {
+export class UserMaterialConfirmRCancelPatchDto {
   @ApiProperty({
     example: '67bacc1cdfff7fff55fffc8d',
     type: mongoose.Schema.Types.ObjectId,
