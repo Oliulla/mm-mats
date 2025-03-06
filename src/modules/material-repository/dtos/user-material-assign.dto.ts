@@ -27,7 +27,7 @@ class MaterialDto {
 
 export class UserMaterialAssignDto {
   @ApiProperty({
-    example: '67bacc1cdfff7fff55fffc8d',
+    example: '67bacc1cdfff7fff55aafc8d',
     type: mongoose.Schema.Types.ObjectId,
   })
   @IsMongoId()
