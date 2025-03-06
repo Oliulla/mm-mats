@@ -30,6 +30,7 @@ import { UserMaterialRepository } from './schemas/user-material-repository.schem
 import { UserMaterialAssignDto } from './dtos/user-material-assign.dto';
 import { pointMaterialDataTransformer } from './material-repository.constants';
 import { UserMaterialConfirmRCancelPatchDto } from './dtos/user-material-confirm.dto';
+import { MaterialIdQtyDto } from './dtos/action-for-material-activity.dto';
 
 @Injectable()
 export class MaterialRepositoryService {
@@ -228,7 +229,6 @@ export class MaterialRepositoryService {
       data.forEach(({ quantity }, idx) => {
         updateDocumentPoint.$inc[`material.$[elem${idx}].remaining`] = quantity;
 
-        updateDocumentUser.$inc[`material.$[elem${idx}].allocated`] = -quantity;
         updateDocumentUser.$inc[`material.$[elem${idx}].pending`] = -quantity;
       });
     }
@@ -249,6 +249,75 @@ export class MaterialRepositoryService {
         filter,
         updateDocumentPoint,
         options,
+      );
+    }
+
+    return {
+      data: null,
+      message: 'Request success',
+    };
+  }
+
+  async userMaterialReturnPatch(
+    userId: string,
+    pointId: string,
+    campaignId: string,
+    data: MaterialIdQtyDto[],
+  ) {
+    if (!data || data.length < 1)
+      throw new BadRequestException('At least one item needs to return!');
+
+    const filterPoint = {
+      point: new Types.ObjectId(pointId),
+      campaign: new Types.ObjectId(campaignId),
+    };
+
+    const filterUser = {
+      point: new Types.ObjectId(pointId),
+      campaign: new Types.ObjectId(campaignId),
+      user: new Types.ObjectId(userId),
+    };
+
+    const updateDocumentPoint = { $inc: {} };
+    const updateDocumentUser = { $inc: {} };
+
+    const arrayFiltersPoint = data.map(({ materialId }, idx) => ({
+      [`elem${idx}.id`]: materialId,
+    }));
+
+    const arrayFiltersUser = data.map(({ materialId, quantity }, idx) => ({
+      [`elem${idx}.id`]: materialId,
+      [`elem${idx}.remaining`]: { $gte: quantity },
+    }));
+
+    data.forEach(({ quantity }, idx) => {
+      updateDocumentPoint.$inc[`material.$[elem${idx}].remaining`] = quantity;
+      updateDocumentUser.$inc[`material.$[elem${idx}].remaining`] = -quantity;
+    });
+
+    const optionsPoint = {
+      arrayFilters: arrayFiltersPoint,
+      upsert: false,
+    };
+
+    const optionsUser = {
+      arrayFilters: arrayFiltersUser,
+      upsert: false,
+    };
+
+    // console.log(filterUser, 'filterUser');
+
+    const res = await this.userMaterialRepositoryModel.findOneAndUpdate(
+      filterUser,
+      updateDocumentUser,
+      optionsUser,
+    );
+
+    if (res) {
+      await this.pointMaterialRepositoryModel.findOneAndUpdate(
+        filterPoint,
+        updateDocumentPoint,
+        optionsPoint,
       );
     }
 
