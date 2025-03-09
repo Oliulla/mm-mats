@@ -85,4 +85,7 @@ export interface PointMaterialDoc {
 export enum ActionType {
   ACCEPT = 'accept',
   CANCEL = 'cancel',
+  RETURN = 'return',
+  DAMAGE = 'damage',
+  LOST = 'lost',
 }

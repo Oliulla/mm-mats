@@ -19,6 +19,21 @@ class Material {
 
   @Prop({ default: 0 })
   pending: number;
+
+  @Prop({ default: 0 })
+  cancelled: number;
+
+  @Prop({ default: 0 })
+  returned: number;
+
+  @Prop({ default: 0 })
+  damaged: number;
+
+  @Prop({ default: 0 })
+  lost: number;
+
+  @Prop({ default: 0 })
+  used: number;
 }
 const MaterialSchema = SchemaFactory.createForClass(Material);
 

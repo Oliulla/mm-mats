@@ -195,7 +195,8 @@ export class MaterialRepositoryService {
     return { data: null, message: 'Request Success' };
   }
 
-  async userAllocatedMaterialConfirmRCancelPatch(
+  async userMaterialActions(
+    userId: string,
     pointId: string,
     campaignId: string,
     actionType: ActionType,
@@ -203,9 +204,15 @@ export class MaterialRepositoryService {
   ) {
     if (!actionType) throw new BadRequestException('Action Type is required!');
     if (!data || data.length < 1)
-      throw new BadRequestException('At least one item needs to accept!');
+      throw new BadRequestException('At least one item needs to be processed!');
 
-    const filter = {
+    const filterUser = {
+      user: new Types.ObjectId(userId),
+      point: new Types.ObjectId(pointId),
+      campaign: new Types.ObjectId(campaignId),
+    };
+
+    const filterPoint = {
       point: new Types.ObjectId(pointId),
       campaign: new Types.ObjectId(campaignId),
     };
@@ -213,42 +220,106 @@ export class MaterialRepositoryService {
     const updateDocumentPoint = { $inc: {} };
     const updateDocumentUser = { $inc: {} };
 
-    const arrayFilters = data.map(({ materialId, quantity }, idx) => ({
-      [`elem${idx}.id`]: materialId,
-      ...(actionType === ActionType.ACCEPT && {
-        [`elem${idx}.pending`]: { $gte: quantity },
-      }),
-    }));
+    const arrayFiltersUser: any[] = [];
+    const arrayFiltersPoint: any[] = [];
+
+    // console.log(actionType, 'actionType');
 
     if (actionType === ActionType.ACCEPT) {
-      data.forEach(({ quantity }, idx) => {
+      data.forEach(({ materialId, quantity }, idx) => {
         updateDocumentUser.$inc[`material.$[elem${idx}].remaining`] = quantity;
         updateDocumentUser.$inc[`material.$[elem${idx}].pending`] = -quantity;
+
+        arrayFiltersUser.push({
+          [`elem${idx}.id`]: materialId,
+          [`elem${idx}.pending`]: { $gte: quantity },
+        });
       });
-    } else {
-      data.forEach(({ quantity }, idx) => {
+    } else if (actionType === ActionType.RETURN) {
+      data.forEach(({ materialId, quantity }, idx) => {
+        updateDocumentPoint.$inc[`material.$[elem${idx}].remaining`] = quantity;
+
+        updateDocumentUser.$inc[`material.$[elem${idx}].remaining`] = -quantity;
+        updateDocumentUser.$inc[`material.$[elem${idx}].returned`] = quantity;
+
+        arrayFiltersUser.push({
+          [`elem${idx}.id`]: materialId,
+          [`elem${idx}.remaining`]: { $gte: quantity },
+        });
+
+        arrayFiltersPoint.push({
+          [`elem${idx}.id`]: materialId,
+        });
+      });
+    } else if (actionType === ActionType.DAMAGE) {
+      data.forEach(({ materialId, quantity }, idx) => {
+        updateDocumentUser.$inc[`material.$[elem${idx}].damaged`] = quantity;
+        updateDocumentUser.$inc[`material.$[elem${idx}].remaining`] = -quantity;
+
+        arrayFiltersUser.push({
+          [`elem${idx}.id`]: materialId,
+          [`elem${idx}.remaining`]: { $gte: quantity },
+        });
+      });
+    } else if (actionType === ActionType.LOST) {
+      data.forEach(({ materialId, quantity }, idx) => {
+        updateDocumentUser.$inc[`material.$[elem${idx}].lost`] = quantity;
+        updateDocumentUser.$inc[`material.$[elem${idx}].remaining`] = -quantity;
+
+        arrayFiltersUser.push({
+          [`elem${idx}.id`]: materialId,
+          [`elem${idx}.remaining`]: { $gte: quantity },
+        });
+      });
+    } else if (actionType === ActionType.CANCEL) {
+      data.forEach(({ materialId, quantity }, idx) => {
         updateDocumentPoint.$inc[`material.$[elem${idx}].remaining`] = quantity;
 
         updateDocumentUser.$inc[`material.$[elem${idx}].pending`] = -quantity;
+        updateDocumentUser.$inc[`material.$[elem${idx}].cancelled`] = quantity;
+
+        arrayFiltersUser.push({
+          [`elem${idx}.id`]: materialId,
+          [`elem${idx}.pending`]: { $gte: quantity },
+        });
+
+        arrayFiltersPoint.push({
+          [`elem${idx}.id`]: materialId,
+        });
       });
     }
 
-    const options = {
-      arrayFilters,
-      upsert: false,
-    };
+    const optionsUser = { arrayFilters: arrayFiltersUser, upsert: false };
+    const optionsPoint = { arrayFilters: arrayFiltersPoint, upsert: false };
+
+    // console.log(
+    //   'Update User Document:',
+    //   JSON.stringify(updateDocumentUser, null, 2),
+    // );
+    // console.log(
+    //   'Update Point Document:',
+    //   JSON.stringify(updateDocumentPoint, null, 2),
+    // );
+    // console.log(
+    //   'User Array Filters:',
+    //   JSON.stringify(arrayFiltersUser, null, 2),
+    // );
+    // console.log(
+    //   'Point Array Filters:',
+    //   JSON.stringify(arrayFiltersPoint, null, 2),
+    // );
 
     await this.userMaterialRepositoryModel.findOneAndUpdate(
-      filter,
+      filterUser,
       updateDocumentUser,
-      options,
+      optionsUser,
     );
 
-    if (actionType !== ActionType.ACCEPT) {
+    if (actionType === ActionType.RETURN || actionType === ActionType.CANCEL) {
       await this.pointMaterialRepositoryModel.findOneAndUpdate(
-        filter,
+        filterPoint,
         updateDocumentPoint,
-        options,
+        optionsPoint,
       );
     }
 
@@ -258,6 +329,7 @@ export class MaterialRepositoryService {
     };
   }
 
+  /*
   async userMaterialReturnPatch(
     userId: string,
     pointId: string,
@@ -325,7 +397,7 @@ export class MaterialRepositoryService {
       data: null,
       message: 'Request success',
     };
-  }
+  } */
 
   private readExcelFile(file: Express.Multer.File): XLSX.WorkBook {
     try {
