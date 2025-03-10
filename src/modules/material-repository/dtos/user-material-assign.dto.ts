@@ -5,6 +5,7 @@ import {
   IsMongoId,
   IsNotEmpty,
   IsNumber,
+  IsString,
   Min,
   ValidateNested,
 } from 'class-validator';
@@ -46,10 +47,10 @@ export class UserMaterialAssignDto {
   @Type(() => MaterialDto)
   material: MaterialDto[];
 
-  //   @ApiProperty({
-  //     example: ['307B', '307A'],
-  //   })
-  //   @IsString({ each: true })
-  //   @IsArray()
-  //   route: string[];
+  @ApiProperty({
+    example: ['307B', '307A'],
+  })
+  @IsString({ each: true })
+  @IsArray()
+  route: string[];
 }
