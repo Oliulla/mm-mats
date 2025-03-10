@@ -31,6 +31,7 @@ import { UserMaterialAssignDto } from './dtos/user-material-assign.dto';
 import { pointMaterialDataTransformer } from './material-repository.constants';
 import { UserMaterialConfirmRCancelPatchDto } from './dtos/user-material-confirm.dto';
 import { MaterialIdQtyDto } from './dtos/action-for-material-activity.dto';
+import { PointMaterialTransferDto } from './dtos/point-material-transfer.dto';
 
 @Injectable()
 export class MaterialRepositoryService {
@@ -326,6 +327,100 @@ export class MaterialRepositoryService {
     return {
       data: null,
       message: 'Request success',
+    };
+  }
+
+  async pointMaterialTransferPatch(
+    srcPointId: string,
+    srcCampId: string,
+    destPointId: string,
+    destCampId: string,
+    data: PointMaterialTransferDto[],
+  ) {
+    const findSrcPointMat = await this.pointMaterialRepositoryModel.findOne({
+      point: srcPointId,
+      campaign: srcCampId,
+    });
+
+    if (!findSrcPointMat?.material) {
+      console.log('No materials found for the source point.');
+      return;
+    }
+
+    const findDestPointMat = await this.pointMaterialRepositoryModel.findOne({
+      point: destPointId,
+      campaign: destCampId,
+    });
+
+    const destPointMats: MaterialAfterProcess[] =
+      findDestPointMat?.material?.map((dt) => ({
+        id: String(dt.id),
+        allocated: dt.allocated,
+        remaining: dt.remaining,
+        pending: dt.pending,
+      })) ?? [];
+
+    const srcPointMats = findSrcPointMat.material;
+    const materialMap = new Map(srcPointMats.map((m) => [String(m.id), m]));
+
+    const validInputMats = data
+      .map((dt) => {
+        const srcMaterial = materialMap.get(String(dt.materialId));
+        if (srcMaterial && srcMaterial.remaining >= dt.quantity) {
+          return {
+            id: String(dt.materialId),
+            allocated: dt.quantity,
+            remaining: 0,
+            pending: dt.quantity,
+          };
+        }
+        return null;
+      })
+      .filter((mat) => mat !== null) as MaterialAfterProcess[];
+
+    if (validInputMats.length === 0) {
+      console.log('No valid materials to transfer.');
+      return;
+    }
+
+    const filter = {
+      point: destPointId,
+      campaign: destCampId,
+    };
+    const matUpd = this.updateMaterials(destPointMats, validInputMats);
+    const update = {
+      $set: {
+        campaign: destCampId,
+        point: destPointId,
+        material: matUpd,
+      },
+    };
+    const options = {
+      upsert: true,
+      returnDocument: 'after' as 'after' | 'before',
+    };
+    const res = await this.pointMaterialRepositoryModel.findOneAndUpdate(
+      filter,
+      update,
+      options,
+    );
+
+    if (res) {
+      const decreaseData = validInputMats.map((vmat) => ({
+        materialId: String(vmat.id),
+        qty: vmat.allocated,
+      }));
+
+      await this.pointMaterialRemainingDecreasing(
+        decreaseData,
+        srcPointId,
+        srcCampId,
+      );
+    }
+
+    return {
+      data: null,
+      message: 'Request Success!',
     };
   }
 

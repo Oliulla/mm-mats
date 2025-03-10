@@ -6,7 +6,7 @@ export enum MaterialRepositoryKind {
 }
 
 export interface MaterialAfterProcess {
-  id: Types.ObjectId;
+  id: string | Types.ObjectId;
   allocated: number;
   remaining: number;
   pending: number;

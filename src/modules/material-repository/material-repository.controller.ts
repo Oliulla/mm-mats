@@ -17,6 +17,7 @@ import { PointMaterialAcceptDto } from './dtos/point-material-accept.dto';
 import { UserMaterialAssignDto } from './dtos/user-material-assign.dto';
 import { UserMaterialConfirmRCancelPatchDto } from './dtos/user-material-confirm.dto';
 import { ActionType } from './material-repository.entities';
+import { PointMaterialTransferDto } from './dtos/point-material-transfer.dto';
 // import { MaterialIdQtyDto } from './dtos/action-for-material-activity.dto';
 
 @ApiTags('material-repository')
@@ -174,4 +175,40 @@ export class MaterialRepositoryController {
   //     data,
   //   );
   // }
+
+  @ApiParam({ name: 'srcPointId', example: '67bac016c7637581cd846145' })
+  @ApiParam({ name: 'srcCampId', example: '67babd16358703a8bd184905' })
+  @ApiParam({ name: 'destPointId', example: '67ce7260b7b9c14bdb5769b4' })
+  @ApiParam({ name: 'destCampId', example: '67ce7300b7b9c14bdb5769b6' })
+  @ApiBody({
+    type: PointMaterialTransferDto,
+    isArray: true,
+  })
+  @Patch(
+    'point-material-transfer/:srcPointId/:srcCampId/:destPointId/:destCampId',
+  )
+  pointMaterialTransferPatch(
+    @Param('srcPointId') srcPointId: string,
+    @Param('srcCampId') srcCampId: string,
+    @Param('destPointId') destPointId: string,
+    @Param('destCampId') destCampId: string,
+    @Body() data: PointMaterialTransferDto[],
+  ) {
+    if (
+      !isValidObjectId(srcPointId) ||
+      !isValidObjectId(srcCampId) ||
+      !isValidObjectId(destPointId) ||
+      !isValidObjectId(destCampId)
+    ) {
+      throw new BadRequestException('Invalid point or campaign Id!');
+    }
+
+    return this.materialRepositoryService.pointMaterialTransferPatch(
+      srcPointId,
+      srcCampId,
+      destPointId,
+      destCampId,
+      data,
+    );
+  }
 }
