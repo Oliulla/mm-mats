@@ -32,6 +32,7 @@ import { pointMaterialDataTransformer } from './material-repository.constants';
 import { UserMaterialConfirmRCancelPatchDto } from './dtos/user-material-confirm.dto';
 import { PointMaterialTransferDto } from './dtos/point-material-transfer.dto';
 import { PointMaterialTransferRepository } from './schemas/point-material-transfer-repository.schema';
+import { PointMaterialRejectDto } from './dtos/point-material-reject.dto';
 
 @Injectable()
 export class MaterialRepositoryService {
@@ -43,7 +44,7 @@ export class MaterialRepositoryService {
     private readonly pointMaterialRepositoryModel: Model<PointMaterialRepository>,
 
     @InjectModel(PointMaterialTransferRepository.name)
-    private readonly pointMaterialTransferRepository: Model<PointMaterialTransferRepository>,
+    private readonly pointMaterialTransferRepositoryModel: Model<PointMaterialTransferRepository>,
 
     @InjectModel(UserMaterialRepository.name)
     private readonly userMaterialRepositoryModel: Model<UserMaterialRepository>,
@@ -163,6 +164,52 @@ export class MaterialRepositoryService {
       updateDocument,
       options,
     );
+
+    return {
+      data: null,
+      message: 'Request success',
+    };
+  }
+
+  async pointMaterialRejectPatch(
+    pointId: string,
+    campaignId: string,
+    data: PointMaterialRejectDto[],
+  ) {
+    if (data?.length < 1)
+      throw new BadRequestException('At least one item needs to accpet!');
+
+    const filter = {
+      point: new Types.ObjectId(pointId),
+      campaign: new Types.ObjectId(campaignId),
+    };
+
+    const findRejectDoc =
+      await this.pointMaterialTransferRepositoryModel.findOne(filter);
+
+    const transformedDta = data.map((dt) => ({
+      materialId: String(dt.materialId),
+      qty: dt.quantity,
+    }));
+    const srcPoint = String(findRejectDoc?.srcPoint);
+    const srcCamp = String(findRejectDoc?.srcCampaign);
+
+    const destPoint = String(findRejectDoc?.point);
+    const destCamp = String(findRejectDoc?.campaign);
+
+    const res = await this.pointMaterialTransferPendingDecreasing(
+      transformedDta,
+      destPoint,
+      destCamp,
+    );
+
+    if (res) {
+      await this.pointMaterialRemainingIncreasing(
+        transformedDta,
+        srcPoint,
+        srcCamp,
+      );
+    }
 
     return {
       data: null,
@@ -350,12 +397,11 @@ export class MaterialRepositoryService {
       return;
     }
 
-    const findDestPointMat = await this.pointMaterialTransferRepository.findOne(
-      {
+    const findDestPointMat =
+      await this.pointMaterialTransferRepositoryModel.findOne({
         point: destPointId,
         campaign: destCampId,
-      },
-    );
+      });
 
     const destPointMats: MaterialAfterProcess[] =
       findDestPointMat?.material?.map((dt) => ({
@@ -406,11 +452,12 @@ export class MaterialRepositoryService {
       upsert: true,
       returnDocument: 'after' as 'after' | 'before',
     };
-    const res = await this.pointMaterialTransferRepository.findOneAndUpdate(
-      filter,
-      update,
-      options,
-    );
+    const res =
+      await this.pointMaterialTransferRepositoryModel.findOneAndUpdate(
+        filter,
+        update,
+        options,
+      );
 
     if (res) {
       const decreaseData = validInputMats.map((vmat) => ({
@@ -796,5 +843,77 @@ export class MaterialRepositoryService {
       updateDocument,
       options,
     );
+  }
+
+  private async pointMaterialRemainingIncreasing(
+    data: { materialId?: string; qty: number }[],
+    pointId: string,
+    campaignId: string,
+  ) {
+    const filter = {
+      point: new Types.ObjectId(pointId),
+      campaign: new Types.ObjectId(campaignId),
+    };
+
+    const arrayFilters = data?.map(({ materialId }, idx) => ({
+      [`elem${idx}.id`]: materialId,
+    }));
+
+    const updateDocument = {
+      $inc: {},
+    };
+
+    data.forEach(({ qty }, idx) => {
+      updateDocument.$inc[`material.$[elem${idx}].remaining`] = qty;
+    });
+
+    const options = {
+      arrayFilters: arrayFilters,
+      upsert: false,
+    };
+
+    await this.pointMaterialRepositoryModel.findOneAndUpdate(
+      filter,
+      updateDocument,
+      options,
+    );
+  }
+
+  private async pointMaterialTransferPendingDecreasing(
+    data: { materialId?: string; qty: number }[],
+    pointId: string,
+    campaignId: string,
+  ) {
+    const filter = {
+      point: new Types.ObjectId(pointId),
+      campaign: new Types.ObjectId(campaignId),
+    };
+
+    const arrayFilters = data?.map(({ materialId, qty }, idx) => ({
+      [`elem${idx}.id`]: materialId,
+      [`elem${idx}.pending`]: { $gte: qty },
+    }));
+
+    const updateDocument = {
+      $inc: {},
+    };
+
+    data.forEach(({ qty }, idx) => {
+      updateDocument.$inc[`material.$[elem${idx}].pending`] = -qty;
+    });
+
+    const options = {
+      arrayFilters: arrayFilters,
+      upsert: false,
+    };
+
+    const res =
+      await this.pointMaterialTransferRepositoryModel.findOneAndUpdate(
+        filter,
+        updateDocument,
+        options,
+      );
+
+    return res;
   }
 }

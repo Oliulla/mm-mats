@@ -18,6 +18,7 @@ import { UserMaterialAssignDto } from './dtos/user-material-assign.dto';
 import { UserMaterialConfirmRCancelPatchDto } from './dtos/user-material-confirm.dto';
 import { ActionType } from './material-repository.entities';
 import { PointMaterialTransferDto } from './dtos/point-material-transfer.dto';
+import { PointMaterialRejectDto } from './dtos/point-material-reject.dto';
 // import { MaterialIdQtyDto } from './dtos/action-for-material-activity.dto';
 
 @ApiTags('material-repository')
@@ -85,6 +86,28 @@ export class MaterialRepositoryController {
     }
 
     return this.materialRepositoryService.pointMaterialAcceptPatch(
+      pointId,
+      campaignId,
+      data,
+    );
+  }
+
+  @ApiParam({ name: 'pointId', example: '67ce7260b7b9c14bdb5769b4' })
+  @ApiParam({ name: 'campaignId', example: '67ce7300b7b9c14bdb5769b6' })
+  @ApiBody({
+    type: [PointMaterialRejectDto],
+  })
+  @Patch('point-material-reject/:pointId/:campaignId')
+  pointMaterialRejectPatch(
+    @Param('pointId') pointId: string,
+    @Param('campaignId') campaignId: string,
+    @Body() data: PointMaterialRejectDto[],
+  ) {
+    if (!isValidObjectId(pointId) || !isValidObjectId(campaignId)) {
+      throw new BadRequestException('Invalid pointId or campaignId!');
+    }
+
+    return this.materialRepositoryService.pointMaterialRejectPatch(
       pointId,
       campaignId,
       data,
