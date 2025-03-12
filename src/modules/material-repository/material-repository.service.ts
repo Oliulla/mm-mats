@@ -30,8 +30,8 @@ import { UserMaterialRepository } from './schemas/user-material-repository.schem
 import { UserMaterialAssignDto } from './dtos/user-material-assign.dto';
 import { pointMaterialDataTransformer } from './material-repository.constants';
 import { UserMaterialConfirmRCancelPatchDto } from './dtos/user-material-confirm.dto';
-import { MaterialIdQtyDto } from './dtos/action-for-material-activity.dto';
 import { PointMaterialTransferDto } from './dtos/point-material-transfer.dto';
+import { PointMaterialTransferRepository } from './schemas/point-material-transfer-repository.schema';
 
 @Injectable()
 export class MaterialRepositoryService {
@@ -41,6 +41,9 @@ export class MaterialRepositoryService {
 
     @InjectModel(PointMaterialRepository.name)
     private readonly pointMaterialRepositoryModel: Model<PointMaterialRepository>,
+
+    @InjectModel(PointMaterialTransferRepository.name)
+    private readonly pointMaterialTransferRepository: Model<PointMaterialTransferRepository>,
 
     @InjectModel(UserMaterialRepository.name)
     private readonly userMaterialRepositoryModel: Model<UserMaterialRepository>,
@@ -347,10 +350,12 @@ export class MaterialRepositoryService {
       return;
     }
 
-    const findDestPointMat = await this.pointMaterialRepositoryModel.findOne({
-      point: destPointId,
-      campaign: destCampId,
-    });
+    const findDestPointMat = await this.pointMaterialTransferRepository.findOne(
+      {
+        point: destPointId,
+        campaign: destCampId,
+      },
+    );
 
     const destPointMats: MaterialAfterProcess[] =
       findDestPointMat?.material?.map((dt) => ({
@@ -392,6 +397,8 @@ export class MaterialRepositoryService {
       $set: {
         campaign: destCampId,
         point: destPointId,
+        srcCampaign: srcCampId,
+        srcPoint: srcPointId,
         material: matUpd,
       },
     };
@@ -399,7 +406,7 @@ export class MaterialRepositoryService {
       upsert: true,
       returnDocument: 'after' as 'after' | 'before',
     };
-    const res = await this.pointMaterialRepositoryModel.findOneAndUpdate(
+    const res = await this.pointMaterialTransferRepository.findOneAndUpdate(
       filter,
       update,
       options,

@@ -18,6 +18,10 @@ import {
   UserMaterialRepository,
   UserMaterialRepositorySchema,
 } from './schemas/user-material-repository.schema';
+import {
+  PointMaterialTransferRepository,
+  PointMaterialTransferRepositorySchema,
+} from './schemas/point-material-transfer-repository.schema';
 
 @Module({
   imports: [
@@ -35,6 +39,11 @@ import {
             name: UserMaterialRepository.name,
             schema: UserMaterialRepositorySchema,
             value: MaterialRepositoryKind.USER,
+          },
+          {
+            name: PointMaterialTransferRepository.name,
+            schema: PointMaterialTransferRepositorySchema,
+            value: MaterialRepositoryKind.POINT,
           },
         ],
       },
